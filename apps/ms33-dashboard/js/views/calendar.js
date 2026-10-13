@@ -87,6 +87,9 @@
   function dayView() {
     var day = V.date;
     var fam = App.timedOn(day).filter(App.isFamily);
+    var head = '<div class="lanes-head"><div class="gutter"></div>' + D.people.map(function (p) {
+      return '<div class="lane-head" style="' + App.pstyle(p) + '">' + App.avatar(p, 28) + '<b>' + p.name + '</b></div>';
+    }).join('') + '</div>';
     var allDay = App.allDayOn(day);
     var ad = allDay.length ? '<div class="allday"><div class="gutter label">All day</div><div class="allday-grid">' + allDay.map(function (e) {
       var fam2 = App.isFamily(e);
@@ -108,8 +111,13 @@
       }).join('') + '</div>' +
       nowLine([day]) + '</div>' +
       '</div></div>';
-    var empty = !App.timedOn(day).length ? '<div class="cal-empty serif">Nothing on the calendar.<br><i>A rare, quiet day.</i></div>' : '';
-    return '<div class="cal-day">' + ad + grid + empty + '</div>';
+    var empty = '';
+    if (!App.timedOn(day).length) {
+      if (D.calendar.status === 'loading') empty = '<div class="cal-empty serif">Loading calendar…</div>';
+      else if (D.calendar.status === 'error') empty = '<div class="cal-empty serif">Calendar unavailable.<br><i>Will try again shortly.</i></div>';
+      else empty = '<div class="cal-empty serif">Nothing on the calendar.<br><i>A rare, quiet day.</i></div>';
+    }
+    return '<div class="cal-day">' + head + ad + grid + empty + '</div>';
   }
 
   // ------------------------------------------------------------ 3 day
@@ -197,7 +205,6 @@
       '<button class="icon-btn" data-nav="1" aria-label="Next">' + App.icon('right', 24) + '</button>' +
       '<button class="btn btn--ghost' + (isToday ? ' is-hidden' : '') + '" data-today>Today</button>' +
       '<div class="seg">' + MODES.map(function (m) { return '<button class="' + (V.mode === m[0] ? 'is-on' : '') + '" data-mode="' + m[0] + '">' + m[1] + '</button>'; }).join('') + '</div>' +
-      '<button class="fab" data-add aria-label="Add event">' + App.icon('plus', 26) + '</button>' +
       '</header>';
   }
 
@@ -232,7 +239,6 @@
       return render();
     }
     if ((t = e.target.closest('[data-day]'))) { V.mode = 'day'; V.date = new Date(+t.dataset.day); V.scroll = null; return render(); }
-    if ((t = e.target.closest('[data-add]'))) return addSheet();
   }
 
   // Swipe left/right to change day (the only swipe gesture in the app)
@@ -324,7 +330,7 @@
           });
           if (t.hasAttribute('data-save')) {
             var title = input.value.trim() || 'New event';
-            var who = st.who.length ? st.who.slice() : ['jordan'];
+            var who = st.who.length ? st.who.slice() : ['mom'];
             var start = App.addDays(App.dayStart(now), st.day), p = st.time.split(':');
             start.setHours(+p[0], +p[1]);
             var e = { id: D._eid(), title: title, people: who, start: start, end: new Date(+start + st.dur * 60000) };
@@ -361,4 +367,5 @@
     if (line) { line.style.top = y(now) + 'px'; line.querySelector('span').textContent = App.fmt.time(now, false); }
   });
   App.on('time', function () { V.date = App.dayStart(App.now()); V.scroll = null; });
+  App.on('data', function () { if (App.current === 'calendar' && V.el) render(); });
 })();

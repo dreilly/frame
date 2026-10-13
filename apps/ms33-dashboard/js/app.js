@@ -1,8 +1,8 @@
-// Core shell: router, demo clock, idle/ambient, toasts, sheets, helpers.
+// Core shell: router, system clock, idle/ambient, toasts, sheets, helpers.
 (function () {
   'use strict';
   var D = window.DATA;
-  var App = window.App = { state: D, views: {}, current: null, mode: 'day', calMode: 'normal' };
+  var App = window.App = { state: D, views: {}, current: null, mode: 'day' };
   var $ = App.$ = function (s, r) { return (r || document).querySelector(s); };
   App.$$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
 
@@ -11,7 +11,9 @@
   App.on = function (e, fn) { (handlers[e] = handlers[e] || []).push(fn); };
   App.emit = function (e, a) { (handlers[e] || []).forEach(function (fn) { fn(a); }); };
 
-  // ------------------------------------------------------------ time (demo clock)
+  // ------------------------------------------------------------ time
+  // Follow the display device's clock by default. Demo controls may temporarily
+  // apply an offset, and "Real time" resets it to the device clock.
   var offset = 0;
   App.now = function () { return new Date(Date.now() + offset); };
   App.setTime = function (h, m) {
@@ -89,13 +91,7 @@
   };
 
   // ------------------------------------------------------------ calendar helpers
-  App.events = function () {
-    var list = D.events.slice();
-    var today = App.dayStart(App.now());
-    if (App.calMode === 'busy') list = list.concat(D.busyExtras);
-    if (App.calMode === 'empty') list = list.filter(function (e) { return e.allDay || !App.sameDay(e.start, today); });
-    return list;
-  };
+  App.events = function () { return D.events.slice(); };
   App.isFamily = function (e) { return e.people.length >= D.people.length; };
   App.evColor = function (e) { return App.isFamily(e) ? D.family : App.person(e.people[0]); };
   App.timedOn = function (day, pid) {
@@ -128,32 +124,67 @@
     for (var i = 0; i < D.routines.length; i++) if (h >= D.routines[i].from && h < D.routines[i].to) return D.routines[i];
     return D.routines[2];
   };
+  function weatherKind(code) {
+    if (code >= 95) return 'storm';
+    if ((code >= 71 && code <= 77) || code === 85 || code === 86) return 'snow';
+    if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) return 'rain';
+    if (code === 45 || code === 48) return 'fog';
+    if (code === 3) return 'cloud';
+    if (code === 2) return 'partly';
+    return 'clear';
+  }
+  function weatherIcon(code, isDay) {
+    var kind = weatherKind(code);
+    if (kind === 'clear') return isDay ? 'sun' : 'moon';
+    return kind;
+  }
+  function weatherLabel(code, isDay) {
+    var kind = weatherKind(code);
+    if (kind === 'clear') return isDay ? 'Sunny' : 'Clear';
+    return { partly: 'Partly cloudy', cloud: 'Overcast', fog: 'Foggy', rain: 'Rain', snow: 'Snow', storm: 'Thunderstorms' }[kind];
+  }
   App.weatherNow = function () {
-    var W = D.weather, h = App.now().getHours();
-    var rainAt = -1;
-    for (var i = h; i < 24; i++) if (W.p[i] >= 50) { rainAt = i; break; }
-    var summary, advice;
-    if (rainAt === h) {
-      var stop = h; while (stop < 24 && W.p[stop] >= 50) stop++;
-      summary = 'Rain until ' + App.fmt.hour(new Date(2000, 0, 1, stop));
-      advice = 'Umbrella weather';
-    } else if (rainAt > -1) {
-      summary = 'Rain from ' + App.fmt.hour(new Date(2000, 0, 1, rainAt));
-      var soccer = App.timedOn(App.now()).filter(function (e) { return /soccer/i.test(e.title) && e.start > App.now(); })[0];
-      advice = soccer ? 'Pack a rain jacket for soccer' : 'Grab a rain jacket';
-    } else {
-      summary = W.t[h] < 12 ? 'Clear and cool' : 'Dry all day';
-      advice = W.t[h] < 12 ? 'Jacket weather' : 'Light layers';
+    var W = D.weather;
+    if (!W.current) return null;
+    var c = W.current, kind = weatherKind(c.code), now = +App.now();
+    var upcoming = W.hourly.filter(function (h) { return h.time > now && h.time < now + 12 * 36e5; });
+    var wet = upcoming.filter(function (h) {
+      var k = weatherKind(h.code);
+      return k === 'rain' || k === 'snow' || k === 'storm' || h.p >= 50;
+    })[0];
+    var summary = weatherLabel(c.code, c.isDay);
+    if (kind !== 'rain' && kind !== 'snow' && kind !== 'storm' && wet) {
+      var wetKind = weatherKind(wet.code);
+      var noun = wetKind === 'snow' ? 'Snow' : wetKind === 'storm' ? 'Storms' : 'Rain';
+      summary = noun + ' possible around ' + App.fmt.hour(new Date(wet.time));
     }
-    var labels = { sun: 'Sunny', moon: 'Clear', partly: 'Partly cloudy', cloud: 'Overcast', rain: 'Rain' };
-    return { temp: W.t[h], cond: W.c[h], label: labels[W.c[h]], hi: W.hi, lo: W.lo, summary: summary, advice: advice, hour: h };
+    var advice;
+    if (kind === 'storm') advice = 'Stay indoors during storms';
+    else if (kind === 'snow') advice = 'Allow extra travel time';
+    else if (kind === 'rain') advice = 'Take an umbrella';
+    else if (kind === 'fog') advice = 'Low visibility outside';
+    else if (c.feels <= 32) advice = 'Bundle up';
+    else if (c.feels <= 50) advice = 'Jacket weather';
+    else if (c.feels >= 85) advice = 'Stay hydrated';
+    else advice = 'Light layers';
+    return {
+      temp: c.temp, cond: weatherIcon(c.code, c.isDay), label: weatherLabel(c.code, c.isDay),
+      hi: W.hi, lo: W.lo, summary: summary, advice: advice, status: W.status, location: W.location
+    };
   };
   App.hourly = function (count) {
-    var W = D.weather, h = App.now().getHours(), out = [];
-    for (var i = 0; i < count; i++) {
-      var x = (h + i) % 24;
-      out.push({ h: x, t: W.t[x], c: W.c[x], p: W.p[x], label: i === 0 ? 'Now' : ((x % 12 || 12) + (x >= 12 ? 'p' : 'a')) });
-    }
+    var W = D.weather;
+    if (!W.current) return [];
+    var now = +App.now();
+    var rows = W.hourly.filter(function (h) { return h.time > now; }).slice(0, Math.max(0, count - 1));
+    var out = [{
+      h: new Date(W.current.time).getHours(), t: W.current.temp,
+      c: weatherIcon(W.current.code, W.current.isDay), p: W.current.p || 0, label: 'Now'
+    }];
+    rows.forEach(function (h) {
+      var hour = new Date(h.time).getHours();
+      out.push({ h: hour, t: h.temp, c: weatherIcon(h.code, h.isDay), p: h.p, label: (hour % 12 || 12) + (hour >= 12 ? 'p' : 'a') });
+    });
     return out;
   };
 
@@ -294,9 +325,8 @@
   var idleSec = 0;
   function onIdleTick() {
     idleSec++;
-    var blocked = $('#takeover').classList.contains('is-open');
     if (App.mode === 'nightdash' && idleSec >= 20) { App.setMode('night'); return; }
-    if (App.mode !== 'day' || blocked) return;
+    if (App.mode !== 'day') return;
     if (idleSec === App.idle.home && App.current !== 'home') { App.closeSheet(); App.go('home'); }
     if (idleSec >= App.idle.ambient) {
       App.closeSheet();
@@ -327,7 +357,6 @@
 
   // ------------------------------------------------------------ boot
   App.start = function () {
-    App.setTime(15, 18); // demo default: a busy weekday afternoon
     fit();
     window.addEventListener('resize', fit);
     // Switch tabs the instant a finger lands (pointerdown), not on release. Keyboard "clicks"

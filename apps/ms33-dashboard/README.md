@@ -37,6 +37,22 @@ npm run build
 npm run preview
 ```
 
+## Weather
+
+Current conditions and the hourly forecast come from the free, keyless Open-Meteo API for Toms River, New Jersey. The client refreshes every 30 minutes and keeps the last successful forecast for up to six hours. Vite and the Cloudflare Worker expose it at `/api/weather` so the frame's older WebView does not need to connect directly to Open-Meteo.
+
+## Apple Calendar
+
+The dashboard reads a published iCloud calendar through the same-origin `/api/calendar` endpoint. The private `webcal://` URL belongs in ignored `.env.local` as `APPLE_CALENDAR_URL`; never put the real URL in source, chat, or browser JavaScript. Calendar data refreshes every five minutes and is cached in the WebView for up to 24 hours.
+
+For a Cloudflare deployment, configure the URL without printing or committing it:
+
+```sh
+npx wrangler secret put APPLE_CALENDAR_URL
+```
+
+The calendar endpoint returns private event data to anyone who can reach the dashboard. Keep the dashboard LAN-only or add an appropriate access-control design before deploying it publicly.
+
 The inherited Cloudflare Workers deployment command is:
 
 ```sh

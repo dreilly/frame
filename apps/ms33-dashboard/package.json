@@ -12,5 +12,8 @@
   "devDependencies": {
     "vite": "^8.3.1",
     "wrangler": "^4.145.0"
+  },
+  "dependencies": {
+    "ical.js": "^2.2.1"
   }
 }

@@ -56,8 +56,8 @@
 .ch.is-done .ch-emoji { box-shadow: none; }
 .ch-none { font-size: 22px; color: var(--mute); padding: 12px 6px; }
 .ch-alldone { font-size: 40px; text-align: center; padding: 6px 0 4px; color: var(--c); }
-.ch-lane:not([data-lane="otto"]) .ch-alldone { color: var(--c); }
-.ch-lane[data-lane="otto"] .ch-alldone { color: #C98A00; }
+.ch-lane:not([data-lane="claire"]) .ch-alldone { color: var(--c); }
+.ch-lane[data-lane="claire"] .ch-alldone { color: #C98A00; }
 
 .ch-week { padding: 10px 12px 14px; border-top: 1px solid var(--line); flex: none; }
 .ch-week .label { font-size: 12px; margin-bottom: 6px; }
