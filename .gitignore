@@ -1,0 +1,21 @@
+# Private device captures and recovery material
+backups/
+diagnostics/
+log/
+downloads/
+
+# Local web development
+node_modules/
+dist/
+.wrangler/
+.env
+.env.*
+!.env.example
+
+# Generated Android outputs
+apps/ms33-homehq/build/
+
+# Host/editor artifacts
+.DS_Store
+__pycache__/
+*.pyc
