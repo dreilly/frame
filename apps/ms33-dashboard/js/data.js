@@ -1,5 +1,6 @@
 // Dashboard data. Live services replace weather and calendar state after startup.
 window.DATA = (function () {
+  var config = window.DASHBOARD_CONFIG;
   var base = new Date();
   base.setHours(0, 0, 0, 0);
 
@@ -129,7 +130,7 @@ window.DATA = (function () {
 
   // Live conditions are loaded from Open-Meteo after startup.
   var weather = {
-    location: 'Toms River, NJ', status: 'loading', updatedAt: null,
+    location: config.weather.location, status: 'loading', updatedAt: null,
     current: null, hourly: [], hi: null, lo: null
   };
 

@@ -1,70 +1,139 @@
-# Home HQ kiosk navigation
+# Home HQ Android kiosk
+
+Home HQ is a small Android HOME/WebView app that displays the hosted dashboard full-screen. It is adapted for Android 6.0/API 23 and does not require root.
+
+You only need this app when using an Android device as the kiosk. The web dashboard can be developed and deployed without building Home HQ.
+
+## Runtime controls
 
 Hold two fingers still on the dashboard for 1.5 seconds to open the native controls:
 
-- **Open launcher** opens another installed Home app, such as Rootless Launcher.
-  If none is available, it opens Android Settings.
-- **Android settings** opens the device's Settings app.
+- **Open launcher** opens another installed Home app, preferring KISS Launcher.
+- **Android settings** opens the device Settings app.
 - **Reload dashboard** reloads the current URL.
-- **Back to dashboard** dismisses the controls.
+- **Back to dashboard** closes the controls.
 
-## Frames without Home or Back buttons
+## Configure the dashboard URL
 
-Some frame firmware omits Android's navigation bar. The two-finger gesture only
-works inside Home HQ, so it cannot bring you back from another app's settings.
+With Android platform tools installed and USB debugging enabled, connect the device and verify it is visible:
 
-Enable **Home HQ navigation** in Android **Settings → Accessibility**. The
-optional service adds floating **Back** and **Dashboard** buttons outside Home HQ:
+```sh
+adb devices -l
+```
+
+Set and persist the URL Home HQ should open:
+
+```sh
+adb shell am start \
+  -a android.intent.action.VIEW \
+  -d 'https://example.com/dashboard' \
+  -n com.wesbos.homehq/.MainActivity
+```
+
+The URL can be HTTPS or a reachable LAN development URL. Do not put credentials or private feed URLs in it.
+
+## Build requirements
+
+- JDK 17, including `javac` and `keytool`
+- Android SDK platform 34
+- Android build-tools 34.0.0
+- Android platform tools for `adb`
+
+Install the required SDK packages with Android's `sdkmanager`:
+
+```sh
+sdkmanager --sdk_root="$ANDROID_HOME" "platform-tools" "build-tools;34.0.0" "platforms;android-34"
+```
+
+### macOS or Linux
+
+From the repository root:
+
+```sh
+ANDROID_HOME=/path/to/android-sdk bash apps/ms33-homehq/build.sh
+```
+
+On Apple Silicon with Homebrew's Android command-line tools, the script's default SDK path is `/opt/homebrew/share/android-commandlinetools`, so `ANDROID_HOME` may be omitted when that path exists.
+
+### Windows
+
+From the repository root in PowerShell:
+
+```powershell
+$env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
+powershell -ExecutionPolicy Bypass -File apps\ms33-homehq\build.ps1
+```
+
+Both scripts create `apps/ms33-homehq/build/homehq.apk`.
+
+## APK signing
+
+Android requires every APK to be signed, and future updates must use the same signing key as the installed version.
+
+The build scripts choose a key in this order:
+
+1. The path in `HOMEHQ_KEYSTORE`, when set.
+2. The original frame's ignored private key under `backups/`, when present.
+3. A user-local key at `~/.android/homehq-debug.keystore`, generated automatically when absent.
+
+Generated keys use the development password `android`. Back up the chosen keystore somewhere private. It is not committed to the repository, and losing it means future APKs cannot update the existing installation.
+
+To use another compatible keystore:
+
+```sh
+HOMEHQ_KEYSTORE=/private/path/homehq.keystore \
+  ANDROID_HOME=/path/to/android-sdk \
+  bash apps/ms33-homehq/build.sh
+```
+
+Do not share the original frame's private signing key. A friend installing Home HQ on another device should let the build create a separate key.
+
+## Install or update
+
+For a first installation:
+
+```sh
+adb install apps/ms33-homehq/build/homehq.apk
+```
+
+For an update signed with the same key:
+
+```sh
+adb install -r apps/ms33-homehq/build/homehq.apk
+```
+
+If Android reports an incompatible certificate, the installed app was signed with a different key. Either rebuild with its original key or uninstall it before installing the new APK:
+
+```sh
+adb uninstall com.wesbos.homehq
+adb install apps/ms33-homehq/build/homehq.apk
+```
+
+Uninstalling clears Home HQ's saved URL and app settings. After installation, press Home and select Home HQ as the default HOME app, then configure the dashboard URL.
+
+## Navigation on frames without system buttons
+
+Some frame firmware omits Android's navigation bar. Enable **Home HQ navigation** under **Android Settings → Accessibility** to add floating **Back** and **Dashboard** buttons while outside Home HQ.
 
 - **Back** performs Android's normal Back action.
-- **Dashboard** returns directly to Home HQ, keeping the current dashboard URL.
-- Drag the dots to move the buttons. Their position is saved.
+- **Dashboard** returns to Home HQ without changing its saved URL.
+- Drag the dots to reposition the controls.
+- Disable **Home HQ navigation** in Accessibility to remove them.
 
-The buttons hide while Home HQ is active and return when you leave it. Android
-keeps the service enabled across reboots. It requests no accessibility events or
-screen-content access and does not require root. Disable **Home HQ navigation**
-in Accessibility settings to remove the buttons.
-
-Keep an ADB connection available while enabling the service on a frame with no
-other way back. If needed, return to the kiosk with:
+The service requests no accessibility events or screen-content access. Keep ADB connected while enabling it on a device that has no other way to navigate back. If needed, return to Home HQ with:
 
 ```sh
 adb shell am start -n com.wesbos.homehq/.MainActivity
 ```
 
-This service supplies navigation controls; it does not change the default Home
-app or automatically launch the dashboard at boot.
+## Compatibility notes
 
-## Build and install
+This shell is tailored to the tested Pastigio M10R5 but may work on other Android 6.0+ devices. It does not perform firmware conversion, enable USB debugging, or modify the device's default HOME selection automatically.
 
-Use JDK 17, Android build-tools 34.0.0, and platform 34. From the repository root:
+The adaptation adds these behaviors to the original Home HQ shell:
 
-```sh
-ANDROID_HOME=/path/to/android-sdk bash apps/ms33-homehq/build.sh
-adb install -r apps/ms33-homehq/build/homehq.apk
-```
+- It can be selected as an Android HOME activity and launch after boot.
+- An HTTP or HTTPS VIEW intent saves a dashboard URL for later launches.
+- **Open launcher** prefers KISS Launcher and skips Frameo.
 
-The build requires the ignored private key at `backups/ms33-app-signing/homehq-debug.keystore` (or `HOMEHQ_KEYSTORE` pointing to its restored copy). It deliberately refuses to generate a new key because a differently signed APK cannot update the Home HQ package already installed on the frame. The saved key and installed APK were verified to share signer certificate SHA-256 `68845378f8ac8296516e39894292405f1f0f7101bcb1c805fbeba4a089474172`.
-
-The kiosk loads the existing hosted dashboard over the frame's Wi-Fi. A USB
-connection is only needed for installation or diagnostics, not normal use.
-
-## MS33 adaptation
-
-This copy comes from `wesbos/photo-frame-dashboard` commit
-`fbe9a30ac4f9c77d3863e19a5e98d9eadb04ab03` and adds three local changes:
-
-- Home HQ is a HOME activity, so selecting it as the default Home launches the
-  dashboard automatically after boot.
-- A URL supplied with an HTTP/HTTPS VIEW intent is saved and reused on later
-  HOME and boot launches.
-- **Open launcher** prefers the installed KISS launcher and skips Frameo.
-
-Set and persist the dashboard URL with:
-
-```sh
-adb shell am start -a android.intent.action.VIEW -d 'https://example.com/dashboard' \
-  -n com.wesbos.homehq/.MainActivity
-```
-
-Hold two fingers for 1.5 seconds and choose **Open launcher** to reach KISS.
+Detailed Pastigio conversion and recovery history is in `../../docs/pastigio-m10r5.md`.

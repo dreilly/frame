@@ -1,17 +1,18 @@
-// Live weather for Toms River, NJ. Open-Meteo requires no API key.
+// Live weather from Open-Meteo. Location settings live in config.js.
 (function () {
   'use strict';
   var D = window.DATA;
-  var CACHE_KEY = 'homehq-weather-v1';
+  var W = window.DASHBOARD_CONFIG.weather;
+  var CACHE_KEY = 'homehq-weather-v2-' + [W.latitude, W.longitude, W.timezone, W.temperatureUnit].join('-');
   var REFRESH_MS = 30 * 60 * 1000;
   var MAX_CACHE_AGE = 6 * 60 * 60 * 1000;
   var API_URL = '/api/weather' +
-    '?latitude=39.95373&longitude=-74.19792' +
+    '?latitude=' + encodeURIComponent(W.latitude) + '&longitude=' + encodeURIComponent(W.longitude) +
     '&current=temperature_2m,apparent_temperature,weather_code,is_day' +
     '&hourly=temperature_2m,precipitation_probability,weather_code,is_day' +
     '&daily=temperature_2m_max,temperature_2m_min' +
-    '&temperature_unit=fahrenheit' +
-    '&timezone=America%2FNew_York' +
+    '&temperature_unit=' + encodeURIComponent(W.temperatureUnit) +
+    '&timezone=' + encodeURIComponent(W.timezone) +
     '&forecast_days=2';
 
   function round(n) { return Math.round(Number(n)); }
@@ -30,7 +31,7 @@
       };
     });
     return {
-      location: 'Toms River, NJ', status: 'live', updatedAt: Date.now(),
+      location: W.location, status: 'live', updatedAt: Date.now(),
       current: {
         time: new Date(json.current.time).getTime(),
         temp: round(json.current.temperature_2m),
@@ -78,7 +79,7 @@
       })
       .catch(function () {
         if (!D.weather.current) publish({
-          location: 'Toms River, NJ', status: 'error', updatedAt: null,
+          location: W.location, status: 'error', updatedAt: null,
           current: null, hourly: [], hi: null, lo: null
         });
       })

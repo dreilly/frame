@@ -14,7 +14,7 @@
     if (!w) {
       var unavailable = D.weather.status === 'error';
       return '<div class="h-wx-loading"><b>' + (unavailable ? 'Weather unavailable' : 'Loading weather…') + '</b>' +
-        '<span>Toms River, NJ · Open-Meteo</span></div>';
+        '<span>' + D.weather.location + ' · Open-Meteo</span></div>';
     }
     var hours = App.hourly(7);
     var tmin = Math.min.apply(null, hours.map(function (h) { return h.t; }));

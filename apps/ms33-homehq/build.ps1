@@ -1,16 +1,23 @@
-# Windows equivalent of build.sh. Builds kiosk\build\homehq.apk without Gradle.
+# Windows equivalent of build.sh. Builds apps\ms33-homehq\build\homehq.apk without Gradle.
 # Needs a JDK 17 and Android build-tools 34 + platform 34 (see build.sh for the sdkmanager line).
 #   .\build.ps1
 # If Windows blocks the unsigned script, run it once with:
 #   powershell -ExecutionPolicy Bypass -File .\build.ps1
-# Install on the tablet: adb install -r build\homehq.apk
+# Install from the repository root: adb install -r apps\ms33-homehq\build\homehq.apk
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 
 $sdk = if ($env:ANDROID_HOME) { $env:ANDROID_HOME } else { "$env:LOCALAPPDATA\Android\Sdk" }
 $bt  = "$sdk\build-tools\34.0.0"
 $jar = "$sdk\platforms\android-34\android.jar"
-$ks  = "$env:USERPROFILE\.android\debug.keystore"
+$projectKs = Join-Path (Resolve-Path "$PSScriptRoot\..\..") "backups\ms33-app-signing\homehq-debug.keystore"
+if ($env:HOMEHQ_KEYSTORE) {
+  $ks = $env:HOMEHQ_KEYSTORE
+} elseif (Test-Path $projectKs) {
+  $ks = $projectKs
+} else {
+  $ks = "$env:USERPROFILE\.android\homehq-debug.keystore"
+}
 if (-not (Test-Path $jar)) { throw "android.jar not found at $jar" }
 
 if (Test-Path build) { Remove-Item build -Recurse -Force }
@@ -23,7 +30,7 @@ function Run($exe, [string[]]$a) {
 
 Run "$bt\aapt2.exe" @('compile', '--dir', 'res', '-o', 'build\res.zip')
 Run "$bt\aapt2.exe" @('link', '-o', 'build\base.apk', '-I', $jar, '--manifest', 'AndroidManifest.xml', 'build\res.zip',
-  '--java', 'build\gen', '--min-sdk-version', '23', '--target-sdk-version', '23', '--version-code', '2', '--version-name', '1.1')
+  '--java', 'build\gen', '--min-sdk-version', '23', '--target-sdk-version', '23', '--version-code', '3', '--version-name', '1.2-ms33')
 
 $src = @(Get-ChildItem src -Recurse -Filter *.java | % FullName) + @('build\gen\com\wesbos\homehq\R.java')
 Run 'javac' (@('-nowarn', '-source', '8', '-target', '8', '-classpath', $jar, '-d', 'build\classes') + $src)
@@ -41,8 +48,10 @@ Run "$bt\zipalign.exe" @('-f', '4', 'build\base.apk', 'build\aligned.apk')
 
 if (-not (Test-Path $ks)) {
   New-Item -ItemType Directory -Force (Split-Path $ks) | Out-Null
-  Run 'keytool' @('-genkeypair', '-keystore', $ks, '-storepass', 'android', '-keypass', 'android', '-alias', 'androiddebugkey',
-    '-keyalg', 'RSA', '-keysize', '2048', '-validity', '10000', '-dname', 'CN=Android Debug,O=Android,C=US')
+  Run 'keytool' @('-genkeypair', '-keystore', $ks, '-storepass', 'android', '-keypass', 'android', '-alias', 'homehq',
+    '-keyalg', 'RSA', '-keysize', '2048', '-validity', '10000', '-dname', 'CN=Home HQ Debug,O=Home HQ,C=US')
+  Write-Output "Created Home HQ signing key: $ks"
+  Write-Output 'Back up this key; future updates to this installation must use it.'
 }
 Run "$bt\apksigner.bat" @('sign', '--ks', $ks, '--ks-pass', 'pass:android', '--key-pass', 'pass:android', '--out', 'build\homehq.apk', 'build\aligned.apk')
-Write-Output "Built kiosk\build\homehq.apk"
+Write-Output "Built apps\ms33-homehq\build\homehq.apk"

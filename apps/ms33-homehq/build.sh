@@ -1,23 +1,33 @@
 #!/usr/bin/env bash
-# Builds kiosk/build/homehq.apk without Gradle. Needs JDK 17 + Android build-tools 34 + platform 34:
+# Builds apps/ms33-homehq/build/homehq.apk without Gradle. Needs JDK 17 + Android build-tools 34 + platform 34:
 #   brew install --cask android-commandlinetools
 #   sdkmanager --sdk_root=$ANDROID_HOME "build-tools;34.0.0" "platforms;android-34"
-# Install on the tablet: adb install -r kiosk/build/homehq.apk
+# Install from the repository root: adb install -r apps/ms33-homehq/build/homehq.apk
 set -euo pipefail
 cd "$(dirname "$0")"
 
 ANDROID_HOME="${ANDROID_HOME:-/opt/homebrew/share/android-commandlinetools}"
 BT="$ANDROID_HOME/build-tools/34.0.0"
 JAR="$ANDROID_HOME/platforms/android-34/android.jar"
-# Keep using the certificate of the APK already installed on this frame. A newly
-# generated key cannot update that package. The project copy is private/ignored;
-# HOMEHQ_KEYSTORE can explicitly override it.
+# Prefer an explicitly selected key, then the private key used by the original
+# frame. New installations get a user-local key that must be kept for updates.
 PROJECT_KS="$(cd ../.. && pwd)/backups/ms33-app-signing/homehq-debug.keystore"
-KS="${HOMEHQ_KEYSTORE:-$PROJECT_KS}"
+USER_KS="${HOME:?}/.android/homehq-debug.keystore"
+if [ -n "${HOMEHQ_KEYSTORE:-}" ]; then
+  KS="$HOMEHQ_KEYSTORE"
+elif [ -f "$PROJECT_KS" ]; then
+  KS="$PROJECT_KS"
+else
+  KS="$USER_KS"
+fi
+
 if [ ! -f "$KS" ]; then
-  echo "Missing Home HQ signing key: $KS" >&2
-  echo "Restore backups/ms33-app-signing/homehq-debug.keystore or set HOMEHQ_KEYSTORE." >&2
-  exit 1
+  mkdir -p "$(dirname "$KS")"
+  keytool -genkeypair -keystore "$KS" -storepass android -keypass android \
+    -alias homehq -keyalg RSA -keysize 2048 -validity 10000 \
+    -dname "CN=Home HQ Debug,O=Home HQ,C=US"
+  echo "Created Home HQ signing key: $KS"
+  echo "Back up this key; future updates to this installation must use it."
 fi
 
 rm -rf build && mkdir -p build/gen build/classes
@@ -34,4 +44,4 @@ javac -nowarn -source 8 -target 8 -classpath "$JAR" -d build/classes \
 "$BT/zipalign" -f 4 build/base.apk build/aligned.apk
 
 "$BT/apksigner" sign --ks "$KS" --ks-pass pass:android --key-pass pass:android --out build/homehq.apk build/aligned.apk
-echo "Built kiosk/build/homehq.apk"
+echo "Built apps/ms33-homehq/build/homehq.apk"
